@@ -26,15 +26,16 @@ vector<unsigned char> padMessage(const string& message) {
     vector<unsigned char> paddedMessage(message.begin(), message.end());
 
     // Padding
-    paddedMessage.push_back(0x80);
+    paddedMessage.push_back(0x80); // adding 1 at the end
     while ((paddedMessage.size() * 8) % 512 != 448) {
+        // adding zeros at the end until the size reaches 448
         paddedMessage.push_back(0x00);
     }
 
     // Append message length as a 64-bit big-endian integer
     uint64_t messageLengthBits = message.size() * 8;
     for (int i = 7; i >= 0; --i) {
-        paddedMessage.push_back((messageLengthBits >> (i * 8)) & 0xFF);
+        paddedMessage.push_back((messageLengthBits >> (i * 8)) & 0xFF); // adding the original length of the message at the end of 512 bits message
     }
 
     return paddedMessage;
@@ -42,17 +43,20 @@ vector<unsigned char> padMessage(const string& message) {
 
 // Process the 512-bit chunks of the message
 void processChunk(const vector<unsigned char>& chunk, unsigned int* h) {
-    unsigned int w[64];
+    unsigned int w[64]; // 512 bits chunk is transformed into 64 words of 32 bit size
+    // we create the first sixteen 32 bit words from the 512 bit chunk i.e. 0-15 words
     for (int i = 0; i < 16; ++i) {
-        w[i] = (chunk[i * 4] << 24) | (chunk[i * 4 + 1] << 16) | (chunk[i * 4 + 2] << 8) | chunk[i * 4 + 3];
+        // combining the four 8 bit integers into one 32 bit integer
+        w[i] = (chunk[i * 4] << 24) | (chunk[i * 4 + 1] << 16) | (chunk[i * 4 + 2] << 8) | chunk[i * 4 + 3]; 
     }
-
+    // message scheduling to fill the remaining 16-63 words
     for (int i = 16; i < 64; ++i) {
-        unsigned int s0 = rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >> 3);
-        unsigned int s1 = rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >> 10);
-        w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+        unsigned int s0 = rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >> 3); // standard formula for sigma 0
+        unsigned int s1 = rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >> 10); // standard formula for signma 1
+        w[i] = w[i - 16] + s0 + w[i - 7] + s1; // standard formula to find the ith word
     }
 
+    // series of steps to transform the 128 bit initial hash value parts (8)
     unsigned int a = h[0];
     unsigned int b = h[1];
     unsigned int c = h[2];
@@ -62,14 +66,14 @@ void processChunk(const vector<unsigned char>& chunk, unsigned int* h) {
     unsigned int g = h[6];
     unsigned int hh = h[7];
 
+    // using all the 64 words we update the a,b,c...g,hh
     for (int i = 0; i < 64; ++i) {
-        unsigned int S1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
-        unsigned int ch = (e & f) ^ ((~e) & g);
-        unsigned int temp1 = hh + S1 + ch + k[i] + w[i];
+        unsigned int S1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25); 
+        unsigned int ch = (e & f) ^ ((~e) & g); // choosing bit by bit f or g based on e bit
+        unsigned int temp1 = hh + S1 + ch + k[i] + w[i]; // standard formula to calcuate temp 1
         unsigned int S0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
-        unsigned int maj = (a & b) ^ (a & c) ^ (b & c);
-        unsigned int temp2 = S0 + maj;
-
+        unsigned int maj = (a & b) ^ (a & c) ^ (b & c);// choosint the majority bit among three numbers
+        unsigned int temp2 = S0 + maj; // standard formula to calculate temp2
         hh = g;
         g = f;
         f = e;
@@ -79,7 +83,8 @@ void processChunk(const vector<unsigned char>& chunk, unsigned int* h) {
         b = a;
         a = temp1 + temp2;
     }
-
+    
+    // finally update the hash values by adding corresponding number
     h[0] += a;
     h[1] += b;
     h[2] += c;
@@ -109,7 +114,7 @@ string sha256(const string& message) {
     // Produce the final hash value (big-endian)
     stringstream ss;
     for (int i = 0; i < 8; ++i) {
-        ss << hex << setw(8) << setfill('0') << h[i];
+        ss << hex << setw(8) << setfill('0') << h[i]; // converts the numbers into hexadecimal ensuring they are 8 characters long, if not replaced with zeros, appends to ss(final output)
     }
 
     return ss.str();
